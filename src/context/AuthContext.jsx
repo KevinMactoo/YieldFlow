@@ -1,127 +1,191 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
+
+// ─── Schema note ──────────────────────────────────────────────────────────────
+//
+// Supabase table required (run in SQL editor):
+//
+// create table public.profiles (
+//   id          uuid primary key references auth.users(id) on delete cascade,
+//   name        text not null,
+//   farm_name   text not null default 'My Farm',
+//   role        text not null default 'farmer'
+//                 check (role in ('owner','manager','accountant','farmer')),
+//   farm_id     uuid not null,
+//   created_at  timestamptz default now()
+// );
+//
+// -- Allow users to read/write only their own profile
+// alter table public.profiles enable row level security;
+// create policy "profiles: own row" on public.profiles
+//   using (auth.uid() = id) with check (auth.uid() = id);
+//
+// -- Allow users to read profiles of people in their own farm
+// create policy "profiles: same farm read" on public.profiles
+//   for select using (
+//     farm_id = (select farm_id from public.profiles where id = auth.uid())
+//   );
+//
+// ─────────────────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext(null)
 
-// Simple deterministic hash — good enough for a localStorage-only app.
-// Not cryptographic; just prevents plain-text password storage.
-function hashPassword(password) {
-  let hash = 0
-  for (let i = 0; i < password.length; i++) {
-    hash = (Math.imul(31, hash) + password.charCodeAt(i)) | 0
+// Merge Supabase auth user + our profiles row into one flat object
+function buildUser(authUser, profile) {
+  if (!authUser) return null
+  return {
+    id:       authUser.id,
+    email:    authUser.email,
+    name:     profile?.name     ?? authUser.email,
+    farm:     profile?.farm_name ?? 'My Farm',
+    farmId:   profile?.farm_id  ?? null,
+    role:     profile?.role     ?? 'farmer',
   }
-  return hash.toString(16)
-}
-
-function loadUsers() {
-  try {
-    return JSON.parse(localStorage.getItem('yieldflow_users') || '{}')
-  } catch {
-    return {}
-  }
-}
-
-function saveUsers(users) {
-  localStorage.setItem('yieldflow_users', JSON.stringify(users))
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('yieldflow_user')
-      return saved ? JSON.parse(saved) : null
-    } catch {
-      return null
-    }
-  })
+  const [user,    setUser]    = useState(null)
+  const [loading, setLoading] = useState(true)  // true until initial session check resolves
 
-  // Returns true on success, or an error string on failure.
-  const login = (email, password) => {
-    const users = loadUsers()
-    const key = email.toLowerCase().trim()
-    const record = users[key]
-
-    if (!record) return 'No account found for this email.'
-    if (record.passwordHash !== hashPassword(password)) return 'Incorrect password.'
-
-    const sessionUser = {
-      id: record.id,
-      name: record.name,
-      email: record.email,
-      farm: record.farm,
-      role: record.role,
-    }
-    localStorage.setItem('yieldflow_user', JSON.stringify(sessionUser))
-    setUser(sessionUser)
-    return true
+  // Fetch profile from Supabase and merge with auth user
+  async function loadProfile(authUser) {
+    if (!authUser) { setUser(null); return }
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('name, farm_name, farm_id, role')
+      .eq('id', authUser.id)
+      .single()
+    setUser(buildUser(authUser, profile))
   }
 
-  // Returns true on success, or an error string on failure.
-  const register = (name, email, farm, password) => {
-    const users = loadUsers()
-    const key = email.toLowerCase().trim()
+  // Subscribe to auth state changes (handles tab focus token refresh, sign-out, etc.)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      loadProfile(session?.user ?? null).finally(() => setLoading(false))
+    })
 
-    if (users[key]) return 'An account with this email already exists.'
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      loadProfile(session?.user ?? null)
+    })
 
-    const newUser = {
-      id: `user_${Date.now()}`,
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // ── register ───────────────────────────────────────────────────────────────
+  // Creates the Supabase Auth user + inserts a profiles row.
+  // The first user to register for a farm becomes the owner; they get a new
+  // farm_id UUID. Subsequent users are added via invite (see users:invite).
+  const register = async (name, email, farmName, password) => {
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name } },   // stored in auth.users.raw_user_meta_data
+    })
+    if (signUpError) return signUpError.message
+
+    const authUser = data.user
+    if (!authUser) return 'Registration failed. Please try again.'
+
+    // Generate a new farm_id for this owner
+    const farm_id = crypto.randomUUID()
+
+    const { error: profileError } = await supabase.from('profiles').insert({
+      id:        authUser.id,
       name,
-      email: key,
-      farm,
-      role: 'admin',
-      passwordHash: hashPassword(password),
-    }
-    users[key] = newUser
-    saveUsers(users)
+      farm_name: farmName,
+      farm_id,
+      role:      'owner',
+    })
+    if (profileError) return profileError.message
 
-    const sessionUser = { id: newUser.id, name, email: key, farm, role: 'admin' }
-    localStorage.setItem('yieldflow_user', JSON.stringify(sessionUser))
-    setUser(sessionUser)
     return true
   }
 
-  const logout = () => {
-    localStorage.removeItem('yieldflow_user')
+  // ── login ──────────────────────────────────────────────────────────────────
+  const login = async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      // Supabase returns "Invalid login credentials" for both bad email and bad
+      // password — give a friendlier message without leaking which is wrong.
+      return error.message === 'Invalid login credentials'
+        ? 'Incorrect email or password.'
+        : error.message
+    }
+    return true
+  }
+
+  // ── logout ─────────────────────────────────────────────────────────────────
+  const logout = async () => {
+    await supabase.auth.signOut()
     setUser(null)
   }
 
-  // Returns { token, email } on success, or an error string.
-  // Stores the token in localStorage keyed by email so ResetPassword can validate it.
-  const requestPasswordReset = (email) => {
-    const users = loadUsers()
-    const key = email.toLowerCase().trim()
-    if (!users[key]) return 'No account found for this email.'
-
-    const token = Math.random().toString(36).slice(2) + Date.now().toString(36)
-    const resets = JSON.parse(localStorage.getItem('yieldflow_resets') || '{}')
-    resets[token] = { email: key, expires: Date.now() + 1000 * 60 * 30 } // 30 min TTL
-    localStorage.setItem('yieldflow_resets', JSON.stringify(resets))
-
-    return { token, email: key }
+  // ── requestPasswordReset ───────────────────────────────────────────────────
+  // Supabase sends a real reset email with a link back to /reset-password.
+  const requestPasswordReset = async (email) => {
+    const redirectTo = `${window.location.origin}/reset-password`
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    if (error) return error.message
+    return true
   }
 
-  // Returns true on success, or an error string.
-  const resetPassword = (token, newPassword) => {
-    const resets = JSON.parse(localStorage.getItem('yieldflow_resets') || '{}')
-    const entry = resets[token]
+  // ── resetPassword ──────────────────────────────────────────────────────────
+  // Called from ResetPassword page after the user clicks the email link.
+  // Supabase sets an active session from the URL token automatically
+  // (detectSessionInUrl: true), so we just update the password directly.
+  const resetPassword = async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) return error.message
+    return true
+  }
 
-    if (!entry) return 'Reset link is invalid.'
-    if (Date.now() > entry.expires) return 'Reset link has expired. Please request a new one.'
+  // ── updateProfile ──────────────────────────────────────────────────────────
+  // Lets the user update their display name or farm name.
+  const updateProfile = async (changes) => {
+    const { error } = await supabase
+      .from('profiles')
+      .update(changes)
+      .eq('id', user.id)
+    if (error) return error.message
+    setUser(prev => ({
+      ...prev,
+      name: changes.name     ?? prev.name,
+      farm: changes.farm_name ?? prev.farm,
+    }))
+    return true
+  }
 
-    const users = loadUsers()
-    if (!users[entry.email]) return 'Account no longer exists.'
+  // ── inviteUser ─────────────────────────────────────────────────────────────
+  // Owner-only: invite a new team member to the same farm with a specific role.
+  // Uses Supabase Admin API via a Postgres function to avoid exposing service key.
+  // Alternatively, owner can share a sign-up link with a role token.
+  // Here we create an invite record the new user will consume on first login.
+  const inviteUser = async (email, name, role) => {
+    if (!user?.farmId) return 'No farm associated with your account.'
 
-    users[entry.email].passwordHash = hashPassword(newPassword)
-    saveUsers(users)
-
-    // Invalidate the token after use
-    delete resets[token]
-    localStorage.setItem('yieldflow_resets', JSON.stringify(resets))
-
+    // Insert a pending invite — the invited user picks it up on first login.
+    const { error } = await supabase.from('invites').insert({
+      email:   email.toLowerCase().trim(),
+      farm_id: user.farmId,
+      role,
+      invited_by: user.id,
+    })
+    if (error) return error.message
     return true
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, requestPasswordReset, resetPassword }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      login,
+      register,
+      logout,
+      requestPasswordReset,
+      resetPassword,
+      updateProfile,
+      inviteUser,
+    }}>
       {children}
     </AuthContext.Provider>
   )

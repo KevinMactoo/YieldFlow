@@ -4,6 +4,7 @@ import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import Modal from '../components/Modal'
 import { useFarm } from '../context/FarmContext'
+import { usePermission } from '../hooks/usePermission'
 
 const empty = { title: '', category: 'Crops', priority: 'Medium', dueDate: '', assignee: '', status: 'Pending', notes: '' }
 
@@ -13,6 +14,7 @@ const CATEGORIES = ['Crops', 'Livestock', 'Flocks', 'Infrastructure', 'Supplies'
 
 export default function Tasks() {
   const { tasks, addTask, updateTask, deleteTask } = useFarm()
+  const { can } = usePermission()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [modal, setModal] = useState(false)
@@ -57,7 +59,7 @@ export default function Tasks() {
             </button>
           ))}
         </div>
-        <button className="btn-primary" onClick={openAdd}><Plus size={16} />Add Task</button>
+        {can('tasks:add') && <button className="btn-primary" onClick={openAdd}><Plus size={16} />Add Task</button>}
       </div>
 
       <div className="space-y-2">
@@ -76,8 +78,8 @@ export default function Tasks() {
             <div className="flex items-center gap-2">
               <Badge label={t.priority} />
               <Badge label={t.status} />
-              <button onClick={() => openEdit(t)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400"><Pencil size={14} /></button>
-              <button onClick={() => deleteTask(t.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+              {can('tasks:edit') && <button onClick={() => openEdit(t)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400"><Pencil size={14} /></button>}
+              {can('tasks:delete') && <button onClick={() => deleteTask(t.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>}
             </div>
           </div>
         ))}

@@ -10,10 +10,10 @@ export default function Login() {
   const [showPwd, setShowPwd] = useState(false)
   const [error, setError] = useState('')
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    const result = login(form.email, form.password)
+    const result = await login(form.email, form.password)
     if (result === true) {
       navigate('/')
     } else {

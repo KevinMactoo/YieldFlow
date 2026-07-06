@@ -5,6 +5,7 @@ import Badge from '../components/Badge'
 import Modal from '../components/Modal'
 import { useFarm } from '../context/FarmContext'
 import { useAuth } from '../context/AuthContext'
+import { usePermission } from '../hooks/usePermission'
 
 const CATEGORIES = ['Crops', 'Livestock', 'Flocks', 'Infrastructure', 'Finance', 'General']
 
@@ -13,6 +14,7 @@ const empty = { date: new Date().toISOString().slice(0, 10), category: 'General'
 export default function DailyLogs() {
   const { logs, addLog, deleteLog } = useFarm()
   const { user } = useAuth()
+  const { can } = usePermission()
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState({ ...empty, author: user?.name ?? '' })
   const [catFilter, setCatFilter] = useState('All')
@@ -48,7 +50,7 @@ export default function DailyLogs() {
             </button>
           ))}
         </div>
-        <button className="btn-primary ml-auto" onClick={() => setModal(true)}><Plus size={16} />Add Log</button>
+        {can('logs:add') && <button className="btn-primary ml-auto" onClick={() => setModal(true)}><Plus size={16} />Add Log</button>}
       </div>
 
       <div className="space-y-6">
@@ -69,7 +71,7 @@ export default function DailyLogs() {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Badge label={log.category} variant="blue" />
-                        <button onClick={() => deleteLog(log.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+                        {can('logs:delete') && <button onClick={() => deleteLog(log.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>}
                       </div>
                     </div>
                     <p className="text-xs text-gray-400 mt-1">By {log.author}</p>

@@ -4,11 +4,13 @@ import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import Modal from '../components/Modal'
 import { useFarm } from '../context/FarmContext'
+import { usePermission } from '../hooks/usePermission'
 
 const empty = { tag: '', name: '', type: 'Cattle', breed: '', sex: 'Female', dob: '', weight: '', status: 'Active', notes: '' }
 
 export default function Livestock() {
   const { livestock, addAnimal, updateAnimal, deleteAnimal } = useFarm()
+  const { can } = usePermission()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('All')
   const [modal, setModal] = useState(false)
@@ -50,7 +52,7 @@ export default function Livestock() {
             </button>
           ))}
         </div>
-        <button className="btn-primary" onClick={openAdd}><Plus size={16} />Add Animal</button>
+        {can('livestock:add') && <button className="btn-primary" onClick={openAdd}><Plus size={16} />Add Animal</button>}
       </div>
 
       <div className="card overflow-x-auto">
@@ -74,8 +76,8 @@ export default function Livestock() {
                 <td className="py-3 pr-4 text-gray-500">{a.weight}</td>
                 <td className="py-3 pr-4"><Badge label={a.status} /></td>
                 <td className="py-3 flex gap-2">
-                  <button onClick={() => openEdit(a)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400"><Pencil size={15} /></button>
-                  <button onClick={() => deleteAnimal(a.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
+                  {can('livestock:edit') && <button onClick={() => openEdit(a)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400"><Pencil size={15} /></button>}
+                  {can('livestock:delete') && <button onClick={() => deleteAnimal(a.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>}
                 </td>
               </tr>
             ))}

@@ -2,25 +2,31 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Sprout, Beef, Bird, CheckSquare,
   BookOpen, HeartPulse, ShoppingCart, Wallet, BarChart3,
-  LogOut, Leaf,
+  LogOut, Leaf, Users,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { ROLE_META } from '../lib/permissions'
+import { usePermission } from '../hooks/usePermission'
 
 const navItems = [
-  { to: '/',         icon: LayoutDashboard, label: 'Dashboard'   },
-  { to: '/crops',    icon: Sprout,          label: 'Crops'       },
-  { to: '/livestock',icon: Beef,            label: 'Livestock'   },
-  { to: '/flocks',   icon: Bird,            label: 'Flocks'      },
-  { to: '/tasks',    icon: CheckSquare,     label: 'Tasks'       },
-  { to: '/daily-logs',icon: BookOpen,       label: 'Daily Logs'  },
-  { to: '/health',   icon: HeartPulse,      label: 'Health'      },
-  { to: '/sales',    icon: ShoppingCart,    label: 'Sales'       },
-  { to: '/finances', icon: Wallet,          label: 'Finances'    },
-  { to: '/reports',  icon: BarChart3,       label: 'Reports'     },
+  { to: '/',          icon: LayoutDashboard, label: 'Dashboard',   action: 'dashboard:view' },
+  { to: '/crops',     icon: Sprout,          label: 'Crops',       action: 'crops:view'     },
+  { to: '/livestock', icon: Beef,            label: 'Livestock',   action: 'livestock:view' },
+  { to: '/flocks',    icon: Bird,            label: 'Flocks',      action: 'flocks:view'    },
+  { to: '/tasks',     icon: CheckSquare,     label: 'Tasks',       action: 'tasks:view'     },
+  { to: '/daily-logs',icon: BookOpen,        label: 'Daily Logs',  action: 'logs:view'      },
+  { to: '/health',    icon: HeartPulse,      label: 'Health',      action: 'health:view'    },
+  { to: '/sales',     icon: ShoppingCart,    label: 'Sales',       action: 'sales:view'     },
+  { to: '/finances',  icon: Wallet,          label: 'Finances',    action: 'finances:view'  },
+  { to: '/reports',   icon: BarChart3,       label: 'Reports',     action: 'reports:view'   },
+  { to: '/team',      icon: Users,           label: 'Team',        action: 'users:view'     },
 ]
 
 export default function Sidebar({ open, onClose }) {
   const { user, logout } = useAuth()
+  const { can } = usePermission()
+
+  const roleMeta = ROLE_META[user?.role] ?? { label: user?.role, color: 'bg-gray-100 text-gray-600' }
 
   return (
     <>
@@ -51,9 +57,9 @@ export default function Sidebar({ open, onClose }) {
           </div>
         )}
 
-        {/* Nav */}
+        {/* Nav — only show items the user's role can access */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
-          {navItems.map(({ to, icon: Icon, label }) => (
+          {navItems.filter(item => can(item.action)).map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
@@ -73,12 +79,15 @@ export default function Sidebar({ open, onClose }) {
           ))}
         </nav>
 
-        {/* User / logout */}
+        {/* User info + role badge + logout */}
         <div className="px-3 pb-4 border-t border-gray-100 pt-3">
           {user && (
             <div className="px-3 py-2 mb-1">
               <p className="text-sm font-medium text-gray-900">{user.name}</p>
-              <p className="text-xs text-gray-400">{user.email}</p>
+              <p className="text-xs text-gray-400 truncate">{user.email}</p>
+              <span className={`inline-block mt-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${roleMeta.color}`}>
+                {roleMeta.label}
+              </span>
             </div>
           )}
           <button

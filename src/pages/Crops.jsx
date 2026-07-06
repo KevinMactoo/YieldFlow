@@ -4,11 +4,13 @@ import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import Modal from '../components/Modal'
 import { useFarm } from '../context/FarmContext'
+import { usePermission } from '../hooks/usePermission'
 
 const empty = { name: '', variety: '', field: '', area: '', unit: 'ha', plantedDate: '', expectedHarvest: '', status: 'Growing', health: 'Good', notes: '' }
 
 export default function Crops() {
   const { crops, addCrop, updateCrop, deleteCrop } = useFarm()
+  const { can } = usePermission()
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState(empty)
@@ -36,9 +38,8 @@ export default function Crops() {
           <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
           <input className="input pl-9" placeholder="Search crops…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <button className="btn-primary ml-auto" onClick={openAdd}><Plus size={16} />Add Crop</button>
+        {can('crops:add') && <button className="btn-primary ml-auto" onClick={openAdd}><Plus size={16} />Add Crop</button>}
       </div>
-
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -60,8 +61,8 @@ export default function Crops() {
                 <td className="py-3 pr-4"><Badge label={c.status} /></td>
                 <td className="py-3 pr-4 text-gray-500">{c.health}</td>
                 <td className="py-3 flex gap-2">
-                  <button onClick={() => openEdit(c)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400"><Pencil size={15} /></button>
-                  <button onClick={() => deleteCrop(c.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
+                  {can('crops:edit') && <button onClick={() => openEdit(c)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400"><Pencil size={15} /></button>}
+                  {can('crops:delete') && <button onClick={() => deleteCrop(c.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>}
                 </td>
               </tr>
             ))}

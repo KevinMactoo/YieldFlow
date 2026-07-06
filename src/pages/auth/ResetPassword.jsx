@@ -1,36 +1,31 @@
-import { useState, useEffect } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Leaf, CheckCircle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 export default function ResetPassword() {
   const { resetPassword } = useAuth()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-
-  const token = searchParams.get('token') || ''
-
   const [form, setForm] = useState({ password: '', confirm: '' })
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
 
-  // Validate the token exists on mount — give early feedback if link is broken
-  useEffect(() => {
-    if (!token) {
-      setError('Invalid reset link. Please request a new one.')
-    }
-  }, [token])
+  // Supabase automatically detects the token from the URL
+  // (detectSessionInUrl: true in supabase.js) and establishes a session,
+  // so we just call updateUser({ password }) directly.
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
 
-    if (form.password !== form.confirm) {
-      setError('Passwords do not match.')
-      return
-    }
+    if (form.password !== form.confirm) { setError('Passwords do not match.'); return }
+    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return }
 
-    const result = resetPassword(token, form.password)
+    setLoading(true)
+    const result = await resetPassword(form.password)
+    setLoading(false)
+
     if (result === true) {
       setSuccess(true)
       setTimeout(() => navigate('/login'), 2500)
@@ -65,35 +60,16 @@ export default function ResetPassword() {
                 )}
                 <div>
                   <label className="label">New Password</label>
-                  <input
-                    className="input"
-                    type="password"
-                    required
-                    minLength={6}
-                    placeholder="••••••••"
-                    value={form.password}
-                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                    disabled={!token}
-                  />
+                  <input className="input" type="password" required minLength={6} placeholder="••••••••"
+                    value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
                 </div>
                 <div>
                   <label className="label">Confirm Password</label>
-                  <input
-                    className="input"
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    value={form.confirm}
-                    onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))}
-                    disabled={!token}
-                  />
+                  <input className="input" type="password" required placeholder="••••••••"
+                    value={form.confirm} onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))} />
                 </div>
-                <button
-                  type="submit"
-                  className="btn-primary w-full justify-center py-2.5"
-                  disabled={!token}
-                >
-                  Reset Password
+                <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-2.5">
+                  {loading ? 'Updating…' : 'Reset Password'}
                 </button>
               </form>
             </>
@@ -102,9 +78,7 @@ export default function ResetPassword() {
 
         {!success && (
           <p className="text-center text-sm text-gray-500 mt-4">
-            <Link to="/login" className="text-primary-600 font-medium hover:underline">
-              Back to login
-            </Link>
+            <Link to="/login" className="text-primary-600 font-medium hover:underline">Back to login</Link>
           </p>
         )}
       </div>

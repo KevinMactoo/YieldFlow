@@ -5,11 +5,13 @@ import Badge from '../components/Badge'
 import Modal from '../components/Modal'
 import StatCard from '../components/StatCard'
 import { useFarm } from '../context/FarmContext'
+import { usePermission } from '../hooks/usePermission'
 
 const empty = { date: new Date().toISOString().slice(0, 10), animal: '', type: 'Treatment', diagnosis: '', treatment: '', vet: '', cost: '', followUp: '', status: 'Ongoing' }
 
 export default function Health() {
   const { health, addHealth, updateHealth } = useFarm()
+  const { can } = usePermission()
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState(empty)
   const [editId, setEditId] = useState(null)
@@ -30,13 +32,15 @@ export default function Health() {
   return (
     <Layout title="Health Records">
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <StatCard icon={HeartPulse} label="Total Records"  value={health.length}     color="primary" />
-        <StatCard icon={HeartPulse} label="Ongoing Cases"  value={ongoing}           color={ongoing > 0 ? 'red' : 'primary'} />
-        <StatCard icon={HeartPulse} label="Total Vet Cost" value={`$${totalCost}`}   color="amber" />
+        <StatCard icon={HeartPulse} label="Total Records"  value={health.length}                          color="primary" />
+        <StatCard icon={HeartPulse} label="Ongoing Cases"  value={ongoing}                               color={ongoing > 0 ? 'red' : 'primary'} />
+        <StatCard icon={HeartPulse} label="Total Vet Cost" value={`KSH ${totalCost.toLocaleString()}`}   color="amber" />
       </div>
 
       <div className="flex justify-end mb-4">
-        <button className="btn-primary" onClick={openAdd}><Plus size={16} />Add Record</button>
+        {can('health:add') && (
+          <button className="btn-primary" onClick={openAdd}><Plus size={16} />Add Record</button>
+        )}
       </div>
 
       <div className="card overflow-x-auto">
@@ -57,11 +61,13 @@ export default function Health() {
                 <td className="py-3 pr-4 text-gray-700">{r.diagnosis}</td>
                 <td className="py-3 pr-4 text-gray-500 max-w-[160px] truncate">{r.treatment}</td>
                 <td className="py-3 pr-4 text-gray-500">{r.vet}</td>
-                <td className="py-3 pr-4 text-gray-700">${r.cost}</td>
+                <td className="py-3 pr-4 text-gray-700">KSH {r.cost}</td>
                 <td className="py-3 pr-4 text-gray-500">{r.followUp || '—'}</td>
                 <td className="py-3 pr-4"><Badge label={r.status} /></td>
                 <td className="py-3">
-                  <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400"><Pencil size={15} /></button>
+                  {can('health:edit') && (
+                    <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400"><Pencil size={15} /></button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -104,7 +110,7 @@ export default function Health() {
               <input className="input" value={form.vet} onChange={e => setForm(f=>({...f,vet:e.target.value}))} />
             </div>
             <div>
-              <label className="label">Cost ($)</label>
+              <label className="label">Cost (KSH)</label>
               <input className="input" type="number" value={form.cost} onChange={e => setForm(f=>({...f,cost:e.target.value}))} />
             </div>
           </div>

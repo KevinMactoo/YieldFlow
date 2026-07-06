@@ -5,21 +5,26 @@ import Badge from '../components/Badge'
 import Modal from '../components/Modal'
 import StatCard from '../components/StatCard'
 import { useFarm } from '../context/FarmContext'
+import { usePermission } from '../hooks/usePermission'
 
-const empty = { date: new Date().toISOString().slice(0, 10), product: '', quantity: '', unit: 'kg', unitPrice: '', total: '', buyer: '', paymentStatus: 'Paid' }
+const empty = { date: new Date().toISOString().slice(0, 10), product: '', quantity: '', unit: 'trays', unitPrice: '', total: '', buyer: '', paymentStatus: 'Paid' }
 
 export default function Sales() {
   const { salesData, addSale, deleteSale } = useFarm()
+  const { can } = usePermission()
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState(empty)
 
-  const totalRevenue = salesData.reduce((s, x) => s + Number(x.total), 0)
+  const totalRevenue   = salesData.reduce((s, x) => s + Number(x.total), 0)
   const pendingPayment = salesData.filter(s => s.paymentStatus === 'Pending').reduce((s, x) => s + Number(x.total), 0)
 
   const filtered = [...salesData]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .filter(s => s.product.toLowerCase().includes(search.toLowerCase()) || s.buyer.toLowerCase().includes(search.toLowerCase()))
+    .filter(s =>
+      s.product.toLowerCase().includes(search.toLowerCase()) ||
+      s.buyer.toLowerCase().includes(search.toLowerCase())
+    )
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -32,9 +37,9 @@ export default function Sales() {
   return (
     <Layout title="Sales">
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <StatCard icon={ShoppingCart} label="Total Revenue"      value={`KSH ${totalRevenue.toLocaleString()}`}    color="primary" />
-        <StatCard icon={TrendingUp}   label="Total Transactions" value={salesData.length}                           color="blue" />
-        <StatCard icon={Clock}        label="Pending Payments"   value={`KSH ${pendingPayment.toLocaleString()}`}   color="amber" />
+        <StatCard icon={ShoppingCart} label="Total Revenue"      value={`KSH ${totalRevenue.toLocaleString()}`}   color="primary" />
+        <StatCard icon={TrendingUp}   label="Total Transactions" value={salesData.length}                          color="blue" />
+        <StatCard icon={Clock}        label="Pending Payments"   value={`KSH ${pendingPayment.toLocaleString()}`}  color="amber" />
       </div>
 
       <div className="flex items-center gap-3 mb-4">
@@ -42,16 +47,18 @@ export default function Sales() {
           <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
           <input className="input pl-9" placeholder="Search product or buyer…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <button className="btn-primary ml-auto" onClick={() => setModal(true)}><Plus size={16} />Record Sale</button>
+        {can('sales:add') && (
+          <button className="btn-primary ml-auto" onClick={() => setModal(true)}><Plus size={16} />Record Sale</button>
+        )}
       </div>
 
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 text-gray-500 font-medium">
-              {['Date','Product','Qty','Unit Price','Total','Buyer','Payment',''].map(h => (
-                <th key={h} className="text-left py-3 pr-4 whitespace-nowrap">{h}</th>
-              ))}
+              {['Date','Product','Qty','Unit Price','Total','Buyer','Payment', can('sales:delete') ? '' : null]
+                .filter(Boolean)
+                .map(h => <th key={h} className="text-left py-3 pr-4 whitespace-nowrap">{h}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -64,9 +71,11 @@ export default function Sales() {
                 <td className="py-3 pr-4 font-semibold text-gray-900">KSH {Number(s.total).toLocaleString()}</td>
                 <td className="py-3 pr-4 text-gray-500">{s.buyer}</td>
                 <td className="py-3 pr-4"><Badge label={s.paymentStatus} /></td>
-                <td className="py-3">
-                  <button onClick={() => deleteSale(s.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
-                </td>
+                {can('sales:delete') && (
+                  <td className="py-3">
+                    <button onClick={() => deleteSale(s.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+                  </td>
+                )}
               </tr>
             ))}
             {filtered.length === 0 && (
@@ -96,7 +105,7 @@ export default function Sales() {
             <div>
               <label className="label">Unit</label>
               <select className="input" value={form.unit} onChange={e => setForm(f=>({...f,unit:e.target.value}))}>
-                {['kg','tonnes','litres','pieces','bags','crates'].map(u => <option key={u}>{u}</option>)}
+                {['trays','kg','tonnes','litres','pieces','bags','crates'].map(u => <option key={u}>{u}</option>)}
               </select>
             </div>
             <div>

@@ -4,11 +4,13 @@ import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import Modal from '../components/Modal'
 import { useFarm } from '../context/FarmContext'
+import { usePermission } from '../hooks/usePermission'
 
 const empty = { name: '', type: 'Chicken', breed: '', count: '', house: '', purpose: 'Eggs', dateAcquired: '', avgWeight: '', status: 'Active', mortality: 0 }
 
 export default function Flocks() {
   const { flocks, addFlock, updateFlock, deleteFlock } = useFarm()
+  const { can } = usePermission()
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState(empty)
   const [editId, setEditId] = useState(null)
@@ -26,7 +28,7 @@ export default function Flocks() {
   return (
     <Layout title="Flocks">
       <div className="flex justify-end mb-6">
-        <button className="btn-primary" onClick={openAdd}><Plus size={16} />Add Flock</button>
+        {can('flocks:add') && <button className="btn-primary" onClick={openAdd}><Plus size={16} />Add Flock</button>}
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -54,8 +56,8 @@ export default function Flocks() {
               <span className={`font-medium ${f.mortality > 10 ? 'text-red-600' : 'text-gray-700'}`}>{f.mortality}</span>
             </div>
             <div className="flex gap-2 mt-4 pt-3 border-t border-gray-100">
-              <button onClick={() => openEdit(f)} className="btn-secondary flex-1 justify-center text-xs py-1.5"><Pencil size={13} />Edit</button>
-              <button onClick={() => deleteFlock(f.id)} className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium text-red-500 border border-red-100 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={13} />Delete</button>
+              {can('flocks:edit') && <button onClick={() => openEdit(f)} className="btn-secondary flex-1 justify-center text-xs py-1.5"><Pencil size={13} />Edit</button>}
+              {can('flocks:delete') && <button onClick={() => deleteFlock(f.id)} className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium text-red-500 border border-red-100 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={13} />Delete</button>}
             </div>
           </div>
         ))}
