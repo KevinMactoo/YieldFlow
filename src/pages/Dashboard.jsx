@@ -4,12 +4,42 @@ import Layout from '../components/Layout'
 import StatCard from '../components/StatCard'
 import Badge from '../components/Badge'
 import { useFarm } from '../context/FarmContext'
-import { monthlyRevenue } from '../data/mockData'
 
 const ksh = (v) => `KSH ${Number(v).toLocaleString()}`
 
+// Derive the monthly revenue/expense chart data from live per-user records.
+function buildMonthlyData(salesData, expenseData) {
+  const map = {}
+
+  const key = (dateStr) => {
+    const d = new Date(dateStr)
+    if (isNaN(d)) return null
+    return d.toLocaleString('en', { month: 'short', year: '2-digit' }) // e.g. "Jan '26"
+  }
+
+  for (const s of salesData) {
+    const k = key(s.date)
+    if (!k) continue
+    map[k] = map[k] || { month: k, revenue: 0, expenses: 0, _date: new Date(s.date) }
+    map[k].revenue += Number(s.total) || 0
+  }
+
+  for (const e of expenseData) {
+    const k = key(e.date)
+    if (!k) continue
+    if (!map[k]) map[k] = { month: k, revenue: 0, expenses: 0, _date: new Date(e.date) }
+    map[k].expenses += Number(e.amount) || 0
+  }
+
+  return Object.values(map)
+    .sort((a, b) => a._date - b._date)
+    .map(({ month, revenue, expenses }) => ({ month, revenue, expenses }))
+}
+
 export default function Dashboard() {
   const { flocks, tasks, salesData, expenseData, eggProduction } = useFarm()
+
+  const monthlyRevenue = buildMonthlyData(salesData, expenseData)
 
   const totalRevenue  = salesData.reduce((s, x) => s + Number(x.total), 0)
   const totalExpenses = expenseData.reduce((s, e) => s + Number(e.amount), 0)

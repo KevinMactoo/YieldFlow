@@ -13,8 +13,12 @@ export default function Register() {
     e.preventDefault()
     setError('')
     if (form.password !== form.confirm) { setError('Passwords do not match.'); return }
-    register(form.name, form.email, form.farm)
-    navigate('/')
+    const result = register(form.name, form.email, form.farm, form.password)
+    if (result === true) {
+      navigate('/')
+    } else {
+      setError(result)
+    }
   }
 
   return (

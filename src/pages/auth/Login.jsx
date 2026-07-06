@@ -13,10 +13,11 @@ export default function Login() {
   const handleSubmit = (e) => {
     e.preventDefault()
     setError('')
-    if (login(form.email, form.password)) {
+    const result = login(form.email, form.password)
+    if (result === true) {
       navigate('/')
     } else {
-      setError('Invalid credentials.')
+      setError(result)
     }
   }
 

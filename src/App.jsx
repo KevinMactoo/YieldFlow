@@ -55,13 +55,24 @@ function AppRoutes() {
   )
 }
 
+function FarmProviderBridge({ children }) {
+  const { user } = useAuth()
+  // key={user?.id} forces FarmProvider to fully remount when the logged-in
+  // user changes, so state always belongs to the current account.
+  return (
+    <FarmProvider key={user?.id ?? 'guest'} userId={user?.id}>
+      {children}
+    </FarmProvider>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <FarmProvider>
+        <FarmProviderBridge>
           <AppRoutes />
-        </FarmProvider>
+        </FarmProviderBridge>
       </AuthProvider>
     </BrowserRouter>
   )
