@@ -76,27 +76,19 @@ export function AuthProvider({ children }) {
   // The first user to register for a farm becomes the owner; they get a new
   // farm_id UUID. Subsequent users are added via invite (see users:invite).
   const register = async (name, email, farmName, password) => {
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name } },   // stored in auth.users.raw_user_meta_data
-    })
-    if (signUpError) return signUpError.message
-
-    const authUser = data.user
-    if (!authUser) return 'Registration failed. Please try again.'
-
-    // Generate a new farm_id for this owner
+    // Pass all profile fields as user metadata — the DB trigger
+    // handle_new_user() picks these up and inserts the profiles row
+    // with security definer, bypassing RLS entirely.
     const farm_id = crypto.randomUUID()
 
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id:        authUser.id,
-      name,
-      farm_name: farmName,
-      farm_id,
-      role:      'owner',
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name, farm_name: farmName, farm_id, role: 'owner' },
+      },
     })
-    if (profileError) return profileError.message
+    if (signUpError) return signUpError.message
 
     return true
   }
