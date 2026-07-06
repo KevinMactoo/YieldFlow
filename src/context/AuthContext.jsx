@@ -84,8 +84,44 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  // Returns { token, email } on success, or an error string.
+  // Stores the token in localStorage keyed by email so ResetPassword can validate it.
+  const requestPasswordReset = (email) => {
+    const users = loadUsers()
+    const key = email.toLowerCase().trim()
+    if (!users[key]) return 'No account found for this email.'
+
+    const token = Math.random().toString(36).slice(2) + Date.now().toString(36)
+    const resets = JSON.parse(localStorage.getItem('yieldflow_resets') || '{}')
+    resets[token] = { email: key, expires: Date.now() + 1000 * 60 * 30 } // 30 min TTL
+    localStorage.setItem('yieldflow_resets', JSON.stringify(resets))
+
+    return { token, email: key }
+  }
+
+  // Returns true on success, or an error string.
+  const resetPassword = (token, newPassword) => {
+    const resets = JSON.parse(localStorage.getItem('yieldflow_resets') || '{}')
+    const entry = resets[token]
+
+    if (!entry) return 'Reset link is invalid.'
+    if (Date.now() > entry.expires) return 'Reset link has expired. Please request a new one.'
+
+    const users = loadUsers()
+    if (!users[entry.email]) return 'Account no longer exists.'
+
+    users[entry.email].passwordHash = hashPassword(newPassword)
+    saveUsers(users)
+
+    // Invalidate the token after use
+    delete resets[token]
+    localStorage.setItem('yieldflow_resets', JSON.stringify(resets))
+
+    return true
+  }
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout }}>
+    <AuthContext.Provider value={{ user, login, register, logout, requestPasswordReset, resetPassword }}>
       {children}
     </AuthContext.Provider>
   )
